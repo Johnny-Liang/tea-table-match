@@ -118,6 +118,7 @@ function renderGuestSelectPage() {
   document.getElementById('new-guest-btn').addEventListener('click', () => {
     currentGuest = null;
     selectedExcludes.clear();
+    assignReturnTo = 'selectGuest'; // 新建客人后返回选择列表
     renderAddGuestPage();
   });
 
@@ -166,7 +167,7 @@ function bindGuestSelectEvents(seatedGuestIds, state) {
           : null;
         currentGuest = guest;
         fillFormWithGuest(guest);
-        assignReturnTo = 'addGuest'; // 从编辑按钮进入，返回到添加编辑页面
+        assignReturnTo = 'selectGuest'; // 从编辑按钮进入，返回到选择客人列表
         renderAddGuestPage();
       }
     });
@@ -233,6 +234,7 @@ function showGuestActionsMenu(guestId) {
       saveState(state);
     }
     // 进入派桌页面（用新客人身份，这样可以重新选桌）
+    assignReturnTo = 'addGuest'; // 从首页进入，返回首页
     renderAssignPage(guest);
   } else if (action === '2') {
     removeGuestFromTable(guestId);
@@ -459,7 +461,12 @@ function bindAddGuestEvents() {
 
   // 返回
   document.getElementById('back-btn').addEventListener('click', () => {
-    renderHomePage();
+    // 根据来源决定返回到哪里
+    if (assignReturnTo === 'selectGuest') {
+      renderGuestSelectPage();
+    } else {
+      renderHomePage();
+    }
   });
 
   // 自动派桌
