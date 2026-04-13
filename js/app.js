@@ -211,8 +211,7 @@ function bindAddGuestEvents() {
   // 自动派桌
   autoAssignBtn.addEventListener('click', () => {
     const guest = getFormData();
-    // TODO: Task 5 跳转派桌页面
-    console.log('自动派桌', guest);
+    renderAssignPage(guest);
   });
 }
 
@@ -288,7 +287,7 @@ function validateForm() {
 
 function renderExcludeList() {
   const container = document.getElementById('exclude-list');
-  const allGuests = getState().guests.filter(g => g.id !== currentGuest?.id);
+  const allGuests = getState().guests.filter(g => !currentGuest || g.id !== currentGuest.id);
 
   if (allGuests.length === 0) {
     container.innerHTML = '<div class="exclude-placeholder">暂无其他客人</div>';
@@ -310,5 +309,84 @@ function renderExcludeList() {
         selectedExcludes.delete(cb.value);
       }
     });
+  });
+}
+
+function renderAssignPage(guest) {
+  const state = getState();
+  const sortedTables = sortTablesByCompatibility(guest, state.tables);
+
+  const app = document.getElementById('app');
+
+  app.innerHTML = `
+    <div class="page">
+      <div class="page-header">
+        <button id="back-btn" class="back-btn">← 返回</button>
+        <h1>选择桌子</h1>
+      </div>
+
+      <div class="guest-info-bar">
+        <span class="guest-name">${escapeHtml(guest.name)}</span>
+        <span class="guest-amounts">${guest.amounts.join('/')}元</span>
+        <span class="guest-smoke">${guest.smokeTolerance ? '可抽烟' : '不抽'}</span>
+        ${guest.excludeGuestIds.length > 0 ? `<span class="guest-excludes">排除${guest.excludeGuestIds.length}人</span>` : ''}
+      </div>
+
+      <div id="tables-list" class="tables-list"></div>
+    </div>
+  `;
+
+  renderAssignTables(sortedTables, guest);
+  bindAssignEvents(guest);
+}
+
+function renderAssignTables(sortedTables, guest) {
+  const container = document.getElementById('tables-list');
+
+  container.innerHTML = sortedTables.map(t => `
+    <div class="assign-table-card ${t.compatible ? '' : 'disabled'}" data-table-id="${t.id}">
+      <div class="table-header">
+        <span class="table-number">桌 ${t.id}</span>
+        <span class="table-amount">${t.amount ? t.amount + '元' : '待定'}</span>
+      </div>
+      <div class="table-guests">
+        ${t.guests.map(g => `<span class="guest-tag">${escapeHtml(g.name)}</span>`).join('')}
+        ${t.guests.length === 0 ? '<span class="empty">空桌</span>' : ''}
+      </div>
+      <div class="table-slots">${t.guests.length}/${MAX_GUESTS_PER_TABLE}人</div>
+      <div class="table-status ${t.compatible ? 'ok' : 'conflict'}">${t.compatible ? '✓ 合适' : t.reason}</div>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.assign-table-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const tableId = parseInt(card.dataset.tableId);
+      if (confirm(`确认将 ${guest.name} 派到 桌 ${tableId}？`)) {
+        assignGuestToTable(guest, tableId);
+        renderHomePage();
+      }
+    });
+  });
+}
+
+function assignGuestToTable(guest, tableId) {
+  const state = getState();
+  const table = state.tables.find(t => t.id === tableId);
+
+  if (!table) return;
+
+  table.guests.push(guest);
+
+  if (!table.amount) {
+    table.amount = getTableAmount(table.guests);
+  }
+
+  saveGuest(guest);
+  saveState(state);
+}
+
+function bindAssignEvents(guest) {
+  document.getElementById('back-btn').addEventListener('click', () => {
+    renderAddGuestPage();
   });
 }

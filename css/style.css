@@ -249,3 +249,105 @@ body {
   color: #999;
   text-align: center;
 }
+
+/* 派桌页面样式 */
+.guest-info-bar {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  background: #e3f2fd;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.guest-info-bar .guest-name {
+  font-weight: 600;
+}
+
+.guest-info-bar .guest-amounts,
+.guest-info-bar .guest-smoke,
+.guest-info-bar .guest-excludes {
+  font-size: 12px;
+  padding: 2px 8px;
+  background: rgba(0,0,0,0.1);
+  border-radius: 4px;
+}
+
+.tables-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.assign-table-card {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.assign-table-card:hover {
+  background: #e3f2fd;
+}
+
+.assign-table-card.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.assign-table-card.disabled:hover {
+  background: white;
+}
+
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.table-number {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.table-amount {
+  color: #666;
+}
+
+.table-guests {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.guest-tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+.table-guests .empty {
+  color: #999;
+}
+
+.table-slots {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 4px;
+}
+
+.table-status {
+  font-size: 12px;
+}
+
+.table-status.ok {
+  color: #4caf50;
+}
+
+.table-status.conflict {
+  color: #f44336;
+}
