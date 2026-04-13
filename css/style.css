@@ -180,7 +180,8 @@ body {
   margin-bottom: 8px;
 }
 
-.form-group input[type="text"] {
+.form-group input[type="text"],
+.form-group input[type="number"] {
   width: 100%;
   padding: 12px;
   font-size: 16px;

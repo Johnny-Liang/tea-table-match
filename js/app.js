@@ -66,8 +66,7 @@ function bindHomeEvents() {
   });
 
   document.getElementById('settings-btn').addEventListener('click', () => {
-    // TODO: 跳转设置页面 Task 8
-    console.log('点击设置');
+    renderSettingsPage();
   });
 }
 
@@ -110,6 +109,52 @@ function removeGuestFromTable(guestId) {
     }
     saveState(state);
   }
+}
+
+// 设置页面
+function renderSettingsPage() {
+  const state = getState();
+  const app = document.getElementById('app');
+
+  app.innerHTML = `
+    <div class="page">
+      <div class="page-header">
+        <button id="back-btn" class="back-btn">← 返回</button>
+        <h1>设置</h1>
+      </div>
+
+      <div class="form">
+        <div class="form-group">
+          <label>桌子数量</label>
+          <input type="number" id="table-count" value="${state.tableCount}" min="1" max="20">
+        </div>
+
+        <button id="save-settings-btn" class="primary-btn">保存设置</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('back-btn').addEventListener('click', () => {
+    renderHomePage();
+  });
+
+  document.getElementById('save-settings-btn').addEventListener('click', () => {
+    const count = parseInt(document.getElementById('table-count').value);
+    const newState = getState();
+
+    // 如果桌子数量增加，添加新桌子
+    if (count > newState.tableCount) {
+      for (let i = newState.tableCount + 1; i <= count; i++) {
+        newState.tables.push({ id: i, guests: [], amount: null });
+      }
+    }
+    // 如果减少，截断
+    newState.tables = newState.tables.slice(0, count);
+    newState.tableCount = count;
+
+    saveState(newState);
+    renderHomePage();
+  });
 }
 
 // 初始化
