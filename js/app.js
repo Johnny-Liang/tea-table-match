@@ -316,6 +316,26 @@ function renderAssignPage(guest) {
   const state = getState();
   const sortedTables = sortTablesByCompatibility(guest, state.tables);
 
+  const hasCompatible = sortedTables.some(t => t.compatible);
+
+  let migrationHTML = '';
+  if (!hasCompatible) {
+    const suggestions = findMigrationSuggestions(guest, state.tables);
+    if (suggestions.length > 0) {
+      migrationHTML = `
+        <div class="migration-section">
+          <h3>💡 智能迁移建议</h3>
+          ${suggestions.map(s => `
+            <div class="migration-item">
+              <div class="migration-reason">${s.reason}</div>
+              <button class="migration-btn" data-index="${suggestions.indexOf(s)}">执行迁移</button>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+  }
+
   const app = document.getElementById('app');
 
   app.innerHTML = `
@@ -332,12 +352,15 @@ function renderAssignPage(guest) {
         ${guest.excludeGuestIds.length > 0 ? `<span class="guest-excludes">排除${guest.excludeGuestIds.length}人</span>` : ''}
       </div>
 
+      ${migrationHTML}
+
       <div id="tables-list" class="tables-list"></div>
     </div>
   `;
 
+  const suggestions = hasCompatible ? [] : findMigrationSuggestions(guest, state.tables);
   renderAssignTables(sortedTables, guest);
-  bindAssignEvents(guest);
+  bindAssignEvents(guest, suggestions);
 }
 
 function renderAssignTables(sortedTables, guest) {
@@ -385,8 +408,47 @@ function assignGuestToTable(guest, tableId) {
   saveState(state);
 }
 
-function bindAssignEvents(guest) {
+function bindAssignEvents(guest, suggestions = []) {
   document.getElementById('back-btn').addEventListener('click', () => {
     renderAddGuestPage();
   });
+
+  // 迁移按钮事件
+  document.querySelectorAll('.migration-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const index = parseInt(btn.dataset.index);
+      const suggestion = suggestions[index];
+      if (confirm(`确认迁移？\n${suggestion.reason}`)) {
+        executeMigration(suggestion, guest);
+        renderHomePage();
+      }
+    });
+  });
+}
+
+function executeMigration(suggestion, newGuest) {
+  const state = getState();
+
+  // 从原桌移除客人
+  const fromTable = state.tables.find(t => t.id === suggestion.fromTable);
+  fromTable.guests = fromTable.guests.filter(g => g.id !== suggestion.movedGuest.id);
+
+  // 添加到新桌
+  const toTable = state.tables.find(t => t.id === suggestion.toTable);
+  suggestion.movedGuest.tableId = suggestion.toTable;
+  toTable.guests.push(suggestion.movedGuest);
+
+  // 新客人添加到原桌
+  newGuest.tableId = suggestion.fromTable;
+  fromTable.guests.push(newGuest);
+
+  // 更新桌面档位
+  fromTable.amount = getTableAmount(fromTable.guests);
+  toTable.amount = getTableAmount(toTable.guests);
+
+  // 保存客人信息
+  saveGuest(newGuest);
+  saveGuest(suggestion.movedGuest);
+
+  saveState(state);
 }

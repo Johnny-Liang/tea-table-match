@@ -351,3 +351,42 @@ body {
 .table-status.conflict {
   color: #f44336;
 }
+
+/* 智能迁移样式 */
+.migration-section {
+  background: #fff3e0;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.migration-section h3 {
+  font-size: 16px;
+  margin-bottom: 12px;
+  color: #e65100;
+}
+
+.migration-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.migration-reason {
+  font-size: 14px;
+  color: #333;
+}
+
+.migration-btn {
+  padding: 8px 16px;
+  background: #ff9800;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}

@@ -123,3 +123,44 @@ function sortTablesByCompatibility(guest, tables) {
       return b.guests.length - a.guests.length;
     });
 }
+
+/**
+ * 智能迁移检测
+ * 尝试移动1个客人来腾出合适位置
+ */
+function findMigrationSuggestions(guest, tables) {
+  const suggestions = [];
+
+  // 先尝试移动1个客人
+  for (const table of tables) {
+    if (table.guests.length === 0) continue;
+
+    for (const guestToMove of table.guests) {
+      const tempTable = {
+        ...table,
+        guests: table.guests.filter(g => g.id !== guestToMove.id)
+      };
+
+      const result = checkCompatibility(guest, tempTable);
+      if (result.compatible) {
+        const otherTables = tables.filter(t => t.id !== table.id);
+        const canMoveTo = otherTables.find(t => {
+          const r = checkCompatibility(guestToMove, t);
+          return r.compatible;
+        });
+
+        if (canMoveTo) {
+          suggestions.push({
+            type: 'move_one',
+            fromTable: table.id,
+            toTable: canMoveTo.id,
+            movedGuest: guestToMove,
+            reason: `移动 ${guestToMove.name} 后可落座`
+          });
+        }
+      }
+    }
+  }
+
+  return suggestions.slice(0, 3);
+}
