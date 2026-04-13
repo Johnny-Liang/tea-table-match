@@ -76,10 +76,23 @@ function showGuestActionsMenu(guestId) {
   const guest = getGuestById(guestId);
   if (!guest) return;
 
+  // 先找到客人当前所在的桌
+  const state = getState();
+  const currentTable = state.tables.find(t => t.guests.some(g => g.id === guestId));
+
   const action = prompt(`${guest.name} 的操作:\n1. 重新派桌\n2. 取消落座\n\n请输入序号:`);
 
   if (action === '1') {
-    // TODO: Task 7 重新派桌
+    // 临时将客人从当前桌移除（模拟未落座状态）
+    if (currentTable) {
+      currentTable.guests = currentTable.guests.filter(g => g.id !== guestId);
+      if (currentTable.guests.length === 0) {
+        currentTable.amount = null;
+      }
+      saveState(state);
+    }
+    // 进入派桌页面（用新客人身份，这样可以重新选桌）
+    renderAssignPage(guest);
   } else if (action === '2') {
     removeGuestFromTable(guestId);
     renderHomePage();
