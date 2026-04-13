@@ -32,8 +32,8 @@ function renderTables(tables) {
         <div class="guest-list">
           ${table.guests.map(g => `
             <div class="guest-item" data-guest-id="${g.id}">
-              <span class="guest-name">${g.name}</span>
-              <span class="guest-amount">${g.amounts.join('/')}元${g.smokeTolerance ? '' : '🚭'}</span>
+              <span class="guest-name">${escapeHtml(g.name)}</span>
+              <span class="guest-amount">${escapeHtml(g.amounts.join('/'))}元${g.smokeTolerance ? '' : '🚭'}</span>
             </div>
           `).join('')}
         </div>
@@ -55,8 +55,7 @@ function renderTables(tables) {
 // 绑定首页按钮事件
 function bindHomeEvents() {
   document.getElementById('add-guest-btn').addEventListener('click', () => {
-    // TODO: 跳转添加客人页面 Task 4
-    console.log('点击添加客人');
+    renderAddGuestPage();
   });
 
   document.getElementById('end-day-btn').addEventListener('click', () => {
@@ -104,3 +103,212 @@ function removeGuestFromTable(guestId) {
 document.addEventListener('DOMContentLoaded', () => {
   renderHomePage();
 });
+
+// 全局变量
+let currentGuest = null;
+let selectedExcludes = new Set();
+
+function renderAddGuestPage() {
+  const app = document.getElementById('app');
+
+  app.innerHTML = `
+    <div class="page">
+      <div class="page-header">
+        <button id="back-btn" class="back-btn">← 返回</button>
+        <h1>添加客人</h1>
+      </div>
+
+      <div class="form">
+        <div class="form-group">
+          <label>搜索客人</label>
+          <input type="text" id="guest-search" placeholder="输入姓名搜索" autocomplete="off">
+          <div id="search-results" class="search-results"></div>
+        </div>
+
+        <div class="form-group">
+          <label>姓名 *</label>
+          <input type="text" id="guest-name" placeholder="请输入姓名" required>
+        </div>
+
+        <div class="form-group">
+          <label>茶费档位</label>
+          <div class="checkbox-group">
+            <label class="checkbox-item">
+              <input type="checkbox" name="amount" value="5">
+              <span>5元</span>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="amount" value="10">
+              <span>10元</span>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="amount" value="20">
+              <span>20元</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>抽烟</label>
+          <div class="radio-group">
+            <label class="radio-item">
+              <input type="radio" name="smoke" value="true" checked>
+              <span>接受</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="smoke" value="false">
+              <span>不接受</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>不能同桌的客人</label>
+          <div id="exclude-list" class="exclude-list">
+            <div class="exclude-placeholder">请先搜索并选择需要排除的客人</div>
+          </div>
+        </div>
+
+        <button id="auto-assign-btn" class="primary-btn" disabled>自动派桌</button>
+      </div>
+    </div>
+  `;
+
+  bindAddGuestEvents();
+}
+
+function bindAddGuestEvents() {
+  const searchInput = document.getElementById('guest-search');
+  const nameInput = document.getElementById('guest-name');
+  const amountCheckboxes = document.querySelectorAll('input[name="amount"]');
+  const smokeRadios = document.querySelectorAll('input[name="smoke"]');
+  const autoAssignBtn = document.getElementById('auto-assign-btn');
+
+  // 搜索输入 (debounce)
+  let searchTimer;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      const results = searchGuests(searchInput.value);
+      renderSearchResults(results);
+    }, 300);
+  });
+
+  // 姓名输入变化启用按钮
+  nameInput.addEventListener('input', validateForm);
+
+  // 档位变化
+  amountCheckboxes.forEach(cb => cb.addEventListener('change', validateForm));
+
+  // 抽烟选项变化
+  smokeRadios.forEach(r => r.addEventListener('change', validateForm));
+
+  // 返回
+  document.getElementById('back-btn').addEventListener('click', () => {
+    renderHomePage();
+  });
+
+  // 自动派桌
+  autoAssignBtn.addEventListener('click', () => {
+    const guest = getFormData();
+    // TODO: Task 5 跳转派桌页面
+    console.log('自动派桌', guest);
+  });
+}
+
+function renderSearchResults(results) {
+  const container = document.getElementById('search-results');
+
+  if (results.length === 0) {
+    container.innerHTML = '<div class="search-empty">未找到匹配的客人，请直接输入姓名添加</div>';
+    return;
+  }
+
+  container.innerHTML = results.map(g => `
+    <div class="search-result-item" data-guest-id="${g.id}">
+      <span class="guest-name">${escapeHtml(g.name)}</span>
+      <span class="guest-info">${g.amounts.join('/')}元 ${g.smokeTolerance ? '可抽烟' : '不抽'}</span>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.search-result-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const guest = getGuestById(item.dataset.guestId);
+      fillFormWithGuest(guest);
+    });
+  });
+}
+
+function fillFormWithGuest(guest) {
+  currentGuest = guest;
+
+  document.getElementById('guest-search').value = guest.name;
+  document.getElementById('guest-name').value = guest.name;
+  document.getElementById('search-results').innerHTML = '';
+
+  // 设置档位
+  document.querySelectorAll('input[name="amount"]').forEach(cb => {
+    cb.checked = guest.amounts.includes(parseInt(cb.value));
+  });
+
+  // 设置抽烟
+  document.querySelector(`input[name="smoke"][value="${guest.smokeTolerance}"]`).checked = true;
+
+  // 设置排除
+  selectedExcludes = new Set(guest.excludeGuestIds || []);
+  renderExcludeList();
+
+  validateForm();
+}
+
+function getFormData() {
+  const name = document.getElementById('guest-name').value.trim();
+  const amounts = Array.from(document.querySelectorAll('input[name="amount"]:checked'))
+    .map(cb => parseInt(cb.value));
+  const smokeTolerance = document.querySelector('input[name="smoke"]:checked').value === 'true';
+
+  return {
+    id: currentGuest?.id || generateId(),
+    name,
+    amounts,
+    smokeTolerance,
+    excludeGuestIds: Array.from(selectedExcludes)
+  };
+}
+
+function validateForm() {
+  const name = document.getElementById('guest-name').value.trim();
+  const amounts = Array.from(document.querySelectorAll('input[name="amount"]:checked'));
+
+  const autoAssignBtn = document.getElementById('auto-assign-btn');
+  autoAssignBtn.disabled = !(name && amounts.length > 0);
+
+  return name && amounts.length > 0;
+}
+
+function renderExcludeList() {
+  const container = document.getElementById('exclude-list');
+  const allGuests = getState().guests.filter(g => g.id !== currentGuest?.id);
+
+  if (allGuests.length === 0) {
+    container.innerHTML = '<div class="exclude-placeholder">暂无其他客人</div>';
+    return;
+  }
+
+  container.innerHTML = allGuests.map(g => `
+    <label class="exclude-item">
+      <input type="checkbox" value="${g.id}" ${selectedExcludes.has(g.id) ? 'checked' : ''}>
+      <span>${escapeHtml(g.name)}</span>
+    </label>
+  `).join('');
+
+  container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) {
+        selectedExcludes.add(cb.value);
+      } else {
+        selectedExcludes.delete(cb.value);
+      }
+    });
+  });
+}
