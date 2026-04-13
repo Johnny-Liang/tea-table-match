@@ -3,13 +3,18 @@
 const STORE_KEY = 'tea_table_match_state';
 
 function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
 
 function getState() {
   const data = localStorage.getItem(STORE_KEY);
   if (data) {
-    return JSON.parse(data);
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      console.error('Failed to parse stored state:', e);
+      return getDefaultState();
+    }
   }
   return getDefaultState();
 }
@@ -56,7 +61,7 @@ function searchGuests(keyword) {
   const state = getState();
   if (!keyword) return state.guests;
   const lower = keyword.toLowerCase();
-  return state.guests.filter(g => g.name.toLowerCase().includes(lower));
+  return state.guests.filter(g => g.name && g.name.toLowerCase().includes(lower));
 }
 
 function getGuestById(id) {
