@@ -51,11 +51,18 @@ function checkAmountCompatibility(guest, table) {
     return { compatible: true, reason: '' };
   }
 
-  const tableAmounts = table.amount ? [table.amount] : table.guests[0].amounts;
-  const intersection = guest.amounts.filter(a => tableAmounts.includes(a));
+  // 获取桌上所有客人能接受的金额交集
+  const tableAcceptable = getTableAcceptableAmounts(table.guests);
+
+  // 如果没有共同可接受的金额（桌上的客人金额存在冲突）
+  if (!tableAcceptable || tableAcceptable.length === 0) {
+    return { compatible: false, reason: `金额不兼容` };
+  }
+
+  const intersection = guest.amounts.filter(a => tableAcceptable.includes(a));
 
   if (intersection.length === 0) {
-    return { compatible: false, reason: `金额不兼容 (${guest.amounts.join('/')}元 vs ${tableAmounts.join('/')}元)` };
+    return { compatible: false, reason: `金额不兼容 (${guest.amounts.join('/')}元 vs ${tableAcceptable.join('/')}元)` };
   }
 
   return { compatible: true, reason: '' };
@@ -63,15 +70,35 @@ function checkAmountCompatibility(guest, table) {
 
 /**
  * 抽烟兼容性检查
+ * - 无所谓可以和任何人同桌
+ * - 其他人需要同桌所有人抽烟习惯一致（或都是无所谓）
  */
 function checkSmokeCompatibility(guest, table) {
-  if (guest.smokeTolerance) {
+  // 如果客人无所谓，可以和任何人同桌
+  if (guest.smokeTolerance === 'any') {
     return { compatible: true, reason: '' };
   }
 
-  const hasNonTolerant = table.guests.some(g => !g.smokeTolerance);
-  if (hasNonTolerant) {
-    return { compatible: false, reason: '抽烟冲突（有烟民）' };
+  // 检查同桌是否有无所谓的人（无所谓的人可以和任何人同桌）
+  const hasAnyTolerant = table.guests.some(g => g.smokeTolerance === 'any');
+  if (hasAnyTolerant) {
+    return { compatible: true, reason: '' };
+  }
+
+  // 如果客人不接受抽烟，检查同桌是否有人抽烟
+  if (guest.smokeTolerance === false) {
+    const hasSmoker = table.guests.some(g => g.smokeTolerance === true);
+    if (hasSmoker) {
+      return { compatible: false, reason: '抽烟冲突（桌上有烟民）' };
+    }
+  }
+
+  // 如果客人接受抽烟，检查同桌是否有人不接受抽烟
+  if (guest.smokeTolerance === true) {
+    const hasNonSmoker = table.guests.some(g => g.smokeTolerance === false);
+    if (hasNonSmoker) {
+      return { compatible: false, reason: '抽烟冲突（桌上有不抽烟的人）' };
+    }
   }
 
   return { compatible: true, reason: '' };
@@ -95,7 +122,7 @@ function checkSocialCompatibility(guest, table) {
 }
 
 /**
- * 获取桌面档位
+ * 获取桌面档位（交集，用于判断新客人能否加入）
  */
 function getTableAmount(guests) {
   if (guests.length === 0) return null;
@@ -109,13 +136,30 @@ function getTableAmount(guests) {
 }
 
 /**
+ * 获取桌面可接受档位（交集，用于显示）
+ */
+function getTableAcceptableAmounts(guests) {
+  if (guests.length === 0) return null;
+  if (guests.length === 1) return guests[0].amounts;
+
+  // 获取所有客人都能接受的金额（交集）
+  let commonAmounts = guests[0].amounts;
+  for (const guest of guests) {
+    commonAmounts = commonAmounts.filter(a => guest.amounts.includes(a));
+  }
+
+  return commonAmounts.length > 0 ? commonAmounts : null;
+}
+
+/**
  * 对桌子按兼容性排序
  */
 function sortTablesByCompatibility(guest, tables) {
   return tables
     .map(table => ({
       ...table,
-      ...checkCompatibility(guest, table)
+      ...checkCompatibility(guest, table),
+      acceptableAmounts: getTableAcceptableAmounts(table.guests)
     }))
     .sort((a, b) => {
       if (a.compatible && !b.compatible) return -1;
@@ -155,7 +199,7 @@ function findMigrationSuggestions(guest, tables) {
             fromTable: table.id,
             toTable: canMoveTo.id,
             movedGuest: guestToMove,
-            reason: `移动 ${guestToMove.name} 后可落座`
+            reason: `将 ${guestToMove.name} 从桌${table.id}移到桌${canMoveTo.id}后，${guest.name}可落座`
           });
         }
       }

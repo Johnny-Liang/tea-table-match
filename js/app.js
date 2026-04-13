@@ -12,8 +12,8 @@ function renderHomePage() {
     </div>
     <div id="tables-container" class="tables-grid"></div>
     <div class="bottom-actions">
-      <button id="add-guest-btn" class="primary-btn">添加客人</button>
-      <button id="end-day-btn" class="danger-btn">下班</button>
+      <button id="add-guest-btn" class="primary-btn">位置安排</button>
+      <button id="end-day-btn" class="danger-btn">清空</button>
     </div>
   `;
 
@@ -28,16 +28,18 @@ function renderTables(tables) {
     const isFull = table.guests.length >= MAX_GUESTS_PER_TABLE;
     return `
       <div class="table-card ${isFull ? 'full' : ''}" data-table-id="${table.id}">
-        <div class="table-number">桌 ${table.id}</div>
+        <div class="table-header-row">
+          <span class="table-number">桌 ${table.id}</span>
+          <span class="slots">${table.guests.length}/${MAX_GUESTS_PER_TABLE}人</span>
+        </div>
         <div class="guest-list">
           ${table.guests.map(g => `
             <div class="guest-item" data-guest-id="${g.id}">
               <span class="guest-name">${escapeHtml(g.name)}</span>
-              <span class="guest-amount">${escapeHtml(g.amounts.join('/'))}元${g.smokeTolerance ? '' : '🚭'}</span>
+              <span class="guest-amount">${escapeHtml(g.amounts.join('/'))}元${g.smokeTolerance === true ? '' : (g.smokeTolerance === false ? '🚭' : '')}</span>
             </div>
           `).join('')}
         </div>
-        <div class="slots">${table.guests.length}/${MAX_GUESTS_PER_TABLE}人</div>
       </div>
     `;
   }).join('');
@@ -52,14 +54,154 @@ function renderTables(tables) {
   });
 }
 
-// 绑定首页按钮事件
-function bindHomeEvents() {
-  document.getElementById('add-guest-btn').addEventListener('click', () => {
+// 客人选择页面
+function renderGuestSelectPage() {
+  const state = getState();
+  const app = document.getElementById('app');
+
+  if (state.guests.length === 0) {
+    // 没有客人，直接打开添加页面
+    renderAddGuestPage();
+    return;
+  }
+
+  // 获取客人落座状态
+  const seatedGuestIds = new Set();
+  state.tables.forEach(table => {
+    table.guests.forEach(g => seatedGuestIds.add(g.id));
+  });
+
+  // 分离已落座和未落座的客人，并排序（未落座在前）
+  const unseatedGuests = state.guests.filter(g => !seatedGuestIds.has(g.id));
+  const seatedGuests = state.guests.filter(g => seatedGuestIds.has(g.id));
+  const sortedGuests = [...unseatedGuests, ...seatedGuests];
+
+  app.innerHTML = `
+    <div class="page">
+      <div class="page-header">
+        <button id="back-btn" class="back-btn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+        <h1>选择客人</h1>
+      </div>
+
+      <div class="search-bar">
+        <input type="text" id="guest-search" placeholder="搜索客人..." autocomplete="off">
+      </div>
+
+      <div id="guest-select-list" class="guest-select-list">
+        ${renderGuestSelectItems(sortedGuests, seatedGuestIds)}
+      </div>
+
+      <div class="bottom-fixed-btn">
+        <button id="new-guest-btn" class="primary-btn">新建客人</button>
+      </div>
+    </div>
+  `;
+
+  // 绑定搜索事件
+  document.getElementById('guest-search').addEventListener('input', (e) => {
+    const keyword = e.target.value.trim().toLowerCase();
+    const filteredGuests = keyword
+      ? sortedGuests.filter(g => g.name.toLowerCase().includes(keyword))
+      : sortedGuests;
+    document.getElementById('guest-select-list').innerHTML = renderGuestSelectItems(filteredGuests, seatedGuestIds);
+    bindGuestSelectEvents(seatedGuestIds, state);
+  });
+
+  // 绑定选择客人事件
+  bindGuestSelectEvents(seatedGuestIds, state);
+
+  // 绑定新建客人事件
+  document.getElementById('new-guest-btn').addEventListener('click', () => {
+    currentGuest = null;
+    selectedExcludes.clear();
     renderAddGuestPage();
   });
 
+  document.getElementById('back-btn').addEventListener('click', () => {
+    renderHomePage();
+  });
+}
+
+function renderGuestSelectItems(guests, seatedGuestIds) {
+  if (guests.length === 0) {
+    return '<div class="guest-select-empty">未找到匹配的客人</div>';
+  }
+  return guests.map(g => {
+    const isSeated = seatedGuestIds.has(g.id);
+    return `
+      <div class="guest-select-item ${isSeated ? 'seated' : ''}" data-guest-id="${g.id}">
+        <div class="guest-select-main">
+          <span class="guest-name">${escapeHtml(g.name)}</span>
+          <span class="guest-info">${g.amounts.join('/')}元 ${formatSmokeTolerance(g.smokeTolerance)}</span>
+        </div>
+        <div class="guest-select-actions">
+          ${isSeated ? '<span class="seated-badge">已落座</span>' : ''}
+          <button class="edit-guest-btn" data-guest-id="${g.id}">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function bindGuestSelectEvents(seatedGuestIds, state) {
+  // 点击编辑按钮 → 进入编辑表单
+  document.querySelectorAll('.edit-guest-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const guestId = btn.dataset.guestId;
+      const guest = getGuestById(guestId);
+      if (guest) {
+        // 记录客人是否从某桌"借"出来，但不立即移除
+        guestOriginalTableId = seatedGuestIds.has(guestId)
+          ? state.tables.find(t => t.guests.some(g => g.id === guestId))?.id || null
+          : null;
+        currentGuest = guest;
+        fillFormWithGuest(guest);
+        assignReturnTo = 'addGuest'; // 从编辑按钮进入，返回到添加编辑页面
+        renderAddGuestPage();
+      }
+    });
+  });
+
+  // 点击卡片 → 直接进入派桌页面
+  document.querySelectorAll('.guest-select-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      // 如果点击的是编辑按钮，不处理
+      if (e.target.closest('.edit-guest-btn')) return;
+
+      const guestId = item.dataset.guestId;
+      const guest = getGuestById(guestId);
+      if (guest) {
+        // 如果客人已落座，先从原桌移除
+        if (seatedGuestIds.has(guestId)) {
+          removeGuestFromTable(guestId);
+        }
+        // 直接进入派桌页面
+        saveGuest(guest);
+        assignReturnTo = 'selectGuest'; // 从列表卡片进入，返回到选择客人页面
+        renderAssignPage(guest);
+      }
+    });
+  });
+}
+
+// 绑定首页按钮事件
+function bindHomeEvents() {
+  document.getElementById('add-guest-btn').addEventListener('click', () => {
+    renderGuestSelectPage();
+  });
+
   document.getElementById('end-day-btn').addEventListener('click', () => {
-    if (confirm('确定下班？将清空所有座位数据。')) {
+    if (confirm('确定清空所有座位数据？')) {
       clearAllSeats();
       renderHomePage();
     }
@@ -119,7 +261,11 @@ function renderSettingsPage() {
   app.innerHTML = `
     <div class="page">
       <div class="page-header">
-        <button id="back-btn" class="back-btn">← 返回</button>
+        <button id="back-btn" class="back-btn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
         <h1>设置</h1>
       </div>
 
@@ -165,6 +311,16 @@ document.addEventListener('DOMContentLoaded', () => {
 // 全局变量
 let currentGuest = null;
 let selectedExcludes = new Set();
+let guestOriginalTableId = null; // 记录客人是否从某桌"借"出来，null表示新客人或未落座
+let assignReturnTo = 'addGuest'; // 派桌页面返回目标：'addGuest'=添加编辑页面，'selectGuest'=选择客人页面
+
+// 格式化抽烟习惯显示
+function formatSmokeTolerance(value) {
+  if (value === true) return '抽烟';
+  if (value === false) return '不抽';
+  if (value === 'any') return '无所谓';
+  return '未知';
+}
 
 function renderAddGuestPage() {
   const app = document.getElementById('app');
@@ -172,20 +328,18 @@ function renderAddGuestPage() {
   app.innerHTML = `
     <div class="page">
       <div class="page-header">
-        <button id="back-btn" class="back-btn">← 返回</button>
-        <h1>添加客人</h1>
+        <button id="back-btn" class="back-btn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+        <h1>${currentGuest ? '编辑客人' : '添加客人'}</h1>
       </div>
 
       <div class="form">
         <div class="form-group">
-          <label>搜索客人</label>
-          <input type="text" id="guest-search" placeholder="输入姓名搜索" autocomplete="off">
-          <div id="search-results" class="search-results"></div>
-        </div>
-
-        <div class="form-group">
           <label>姓名 *</label>
-          <input type="text" id="guest-name" placeholder="请输入姓名" required>
+          <input type="text" id="guest-name" placeholder="请输入姓名" required value="${currentGuest ? escapeHtml(currentGuest.name) : ''}">
         </div>
 
         <div class="form-group">
@@ -210,23 +364,32 @@ function renderAddGuestPage() {
           <label>抽烟</label>
           <div class="radio-group">
             <label class="radio-item">
-              <input type="radio" name="smoke" value="true" checked>
+              <input type="radio" name="smoke" value="true">
               <span>接受</span>
             </label>
             <label class="radio-item">
               <input type="radio" name="smoke" value="false">
               <span>不接受</span>
             </label>
+            <label class="radio-item">
+              <input type="radio" name="smoke" value="any" checked>
+              <span>无所谓</span>
+            </label>
           </div>
         </div>
 
         <div class="form-group">
           <label>不能同桌的客人</label>
+          <div class="search-bar">
+            <input type="text" id="exclude-search" placeholder="搜索客人..." autocomplete="off">
+          </div>
           <div id="exclude-list" class="exclude-list">
-            <div class="exclude-placeholder">请先搜索并选择需要排除的客人</div>
+            <div class="exclude-placeholder">暂无其他客人</div>
           </div>
         </div>
+      </div>
 
+      <div class="bottom-fixed-btn">
         <button id="auto-assign-btn" class="primary-btn" disabled>自动派桌</button>
       </div>
     </div>
@@ -236,30 +399,63 @@ function renderAddGuestPage() {
 }
 
 function bindAddGuestEvents() {
-  const searchInput = document.getElementById('guest-search');
   const nameInput = document.getElementById('guest-name');
   const amountCheckboxes = document.querySelectorAll('input[name="amount"]');
   const smokeRadios = document.querySelectorAll('input[name="smoke"]');
   const autoAssignBtn = document.getElementById('auto-assign-btn');
 
-  // 搜索输入 (debounce)
-  let searchTimer;
-  searchInput.addEventListener('input', () => {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => {
-      const results = searchGuests(searchInput.value);
-      renderSearchResults(results);
-    }, 300);
+  // 初始化表单数据（如果是编辑已有客人）
+  if (currentGuest) {
+    // 如果 currentGuest 有完整数据（包括 name），恢复表单
+    if (currentGuest.name) {
+      nameInput.value = currentGuest.name;
+    }
+    // 设置档位
+    if (currentGuest.amounts && currentGuest.amounts.length > 0) {
+      amountCheckboxes.forEach(cb => {
+        cb.checked = currentGuest.amounts.includes(parseInt(cb.value));
+      });
+    }
+    // 设置抽烟
+    if (currentGuest.smokeTolerance !== undefined) {
+      document.querySelector(`input[name="smoke"][value="${currentGuest.smokeTolerance}"]`).checked = true;
+    }
+  }
+
+  // 始终渲染排除列表（无论新建还是编辑客人）
+  renderExcludeList();
+  validateForm();
+
+  // 排除列表搜索
+  const excludeSearchInput = document.getElementById('exclude-search');
+  excludeSearchInput.addEventListener('input', (e) => {
+    renderExcludeList(e.target.value.trim());
   });
 
-  // 姓名输入变化启用按钮
-  nameInput.addEventListener('input', validateForm);
+  // 姓名输入变化同步到 currentGuest
+  nameInput.addEventListener('input', () => {
+    if (currentGuest) {
+      currentGuest.name = nameInput.value.trim();
+    }
+    validateForm();
+  });
 
   // 档位变化
-  amountCheckboxes.forEach(cb => cb.addEventListener('change', validateForm));
+  amountCheckboxes.forEach(cb => cb.addEventListener('change', () => {
+    if (currentGuest) {
+      currentGuest.amounts = Array.from(document.querySelectorAll('input[name="amount"]:checked'))
+        .map(c => parseInt(c.value));
+    }
+    validateForm();
+  }));
 
   // 抽烟选项变化
-  smokeRadios.forEach(r => r.addEventListener('change', validateForm));
+  smokeRadios.forEach(r => r.addEventListener('change', () => {
+    if (currentGuest) {
+      const val = document.querySelector('input[name="smoke"]:checked').value;
+      currentGuest.smokeTolerance = val === 'true' ? true : (val === 'false' ? false : 'any');
+    }
+  }));
 
   // 返回
   document.getElementById('back-btn').addEventListener('click', () => {
@@ -269,60 +465,21 @@ function bindAddGuestEvents() {
   // 自动派桌
   autoAssignBtn.addEventListener('click', () => {
     const guest = getFormData();
+    saveGuest(guest); // 先保存客人数据
     renderAssignPage(guest);
-  });
-}
-
-function renderSearchResults(results) {
-  const container = document.getElementById('search-results');
-
-  if (results.length === 0) {
-    container.innerHTML = '<div class="search-empty">未找到匹配的客人，请直接输入姓名添加</div>';
-    return;
-  }
-
-  container.innerHTML = results.map(g => `
-    <div class="search-result-item" data-guest-id="${g.id}">
-      <span class="guest-name">${escapeHtml(g.name)}</span>
-      <span class="guest-info">${g.amounts.join('/')}元 ${g.smokeTolerance ? '可抽烟' : '不抽'}</span>
-    </div>
-  `).join('');
-
-  container.querySelectorAll('.search-result-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const guest = getGuestById(item.dataset.guestId);
-      fillFormWithGuest(guest);
-    });
   });
 }
 
 function fillFormWithGuest(guest) {
   currentGuest = guest;
-
-  document.getElementById('guest-search').value = guest.name;
-  document.getElementById('guest-name').value = guest.name;
-  document.getElementById('search-results').innerHTML = '';
-
-  // 设置档位
-  document.querySelectorAll('input[name="amount"]').forEach(cb => {
-    cb.checked = guest.amounts.includes(parseInt(cb.value));
-  });
-
-  // 设置抽烟
-  document.querySelector(`input[name="smoke"][value="${guest.smokeTolerance}"]`).checked = true;
-
-  // 设置排除
-  selectedExcludes = new Set(guest.excludeGuestIds || []);
-  renderExcludeList();
-
-  validateForm();
 }
 
 function getFormData() {
   const name = document.getElementById('guest-name').value.trim();
   const amounts = Array.from(document.querySelectorAll('input[name="amount"]:checked'))
     .map(cb => parseInt(cb.value));
-  const smokeTolerance = document.querySelector('input[name="smoke"]:checked').value === 'true';
+  const smokeVal = document.querySelector('input[name="smoke"]:checked').value;
+  const smokeTolerance = smokeVal === 'true' ? true : (smokeVal === 'false' ? false : 'any');
 
   return {
     id: currentGuest?.id || generateId(),
@@ -343,12 +500,27 @@ function validateForm() {
   return name && amounts.length > 0;
 }
 
-function renderExcludeList() {
+function renderExcludeList(keyword = '') {
   const container = document.getElementById('exclude-list');
-  const allGuests = getState().guests.filter(g => !currentGuest || g.id !== currentGuest.id);
+  // 从 state 获取最新客人列表
+  const state = getState();
+  // 获取当前客人的最新数据（确保 excludeGuestIds 是最新的）
+  const currentGuestData = currentGuest?.id ? state.guests.find(g => g.id === currentGuest.id) : null;
+  // 如果 state 中有当前客人的数据，使用其 excludeGuestIds
+  if (currentGuestData && currentGuestData.excludeGuestIds) {
+    selectedExcludes = new Set(currentGuestData.excludeGuestIds);
+  }
+
+  let allGuests = state.guests.filter(g => !currentGuest?.id || g.id !== currentGuest.id);
+
+  // 搜索过滤
+  if (keyword) {
+    const lowerKeyword = keyword.toLowerCase();
+    allGuests = allGuests.filter(g => g.name.toLowerCase().includes(lowerKeyword));
+  }
 
   if (allGuests.length === 0) {
-    container.innerHTML = '<div class="exclude-placeholder">暂无其他客人</div>';
+    container.innerHTML = `<div class="exclude-placeholder">${keyword ? '未找到匹配的客人' : '暂无其他客人'}</div>`;
     return;
   }
 
@@ -382,11 +554,11 @@ function renderAssignPage(guest) {
     if (suggestions.length > 0) {
       migrationHTML = `
         <div class="migration-section">
-          <h3>💡 智能迁移建议</h3>
+          <h3>💡 智能换位建议</h3>
           ${suggestions.map(s => `
             <div class="migration-item">
               <div class="migration-reason">${s.reason}</div>
-              <button class="migration-btn" data-index="${suggestions.indexOf(s)}">执行迁移</button>
+              <button class="migration-btn" data-index="${suggestions.indexOf(s)}">换位</button>
             </div>
           `).join('')}
         </div>
@@ -399,14 +571,18 @@ function renderAssignPage(guest) {
   app.innerHTML = `
     <div class="page">
       <div class="page-header">
-        <button id="back-btn" class="back-btn">← 返回</button>
+        <button id="back-btn" class="back-btn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
         <h1>选择桌子</h1>
       </div>
 
       <div class="guest-info-bar">
         <span class="guest-name">${escapeHtml(guest.name)}</span>
         <span class="guest-amounts">${guest.amounts.join('/')}元</span>
-        <span class="guest-smoke">${guest.smokeTolerance ? '可抽烟' : '不抽'}</span>
+        <span class="guest-smoke">${formatSmokeTolerance(guest.smokeTolerance)}</span>
         ${guest.excludeGuestIds.length > 0 ? `<span class="guest-excludes">排除${guest.excludeGuestIds.length}人</span>` : ''}
       </div>
 
@@ -428,7 +604,7 @@ function renderAssignTables(sortedTables, guest) {
     <div class="assign-table-card ${t.compatible ? '' : 'disabled'}" data-table-id="${t.id}">
       <div class="table-header">
         <span class="table-number">桌 ${t.id}</span>
-        <span class="table-amount">${t.amount ? t.amount + '元' : '待定'}</span>
+        <span class="table-amount">${t.acceptableAmounts ? t.acceptableAmounts.join('/') + '元' : '待定'}</span>
       </div>
       <div class="table-guests">
         ${t.guests.map(g => `<span class="guest-tag">${escapeHtml(g.name)}</span>`).join('')}
@@ -456,6 +632,18 @@ function assignGuestToTable(guest, tableId) {
 
   if (!table) return;
 
+  // 如果客人是从其他桌"借"出来的，先从原桌移除
+  if (guestOriginalTableId !== null) {
+    const originalTable = state.tables.find(t => t.id === guestOriginalTableId);
+    if (originalTable) {
+      originalTable.guests = originalTable.guests.filter(g => g.id !== guest.id);
+      if (originalTable.guests.length === 0) {
+        originalTable.amount = null;
+      }
+    }
+    guestOriginalTableId = null; // 清空标记
+  }
+
   table.guests.push(guest);
 
   if (!table.amount) {
@@ -468,12 +656,26 @@ function assignGuestToTable(guest, tableId) {
 
 function bindAssignEvents(guest, suggestions = []) {
   document.getElementById('back-btn').addEventListener('click', () => {
-    renderAddGuestPage();
+    // 返回前保存当前表单数据到 currentGuest
+    currentGuest = {
+      ...guest,
+      name: guest.name,
+      amounts: guest.amounts,
+      smokeTolerance: guest.smokeTolerance,
+      excludeGuestIds: guest.excludeGuestIds
+    };
+
+    // 根据来源决定返回到哪里
+    if (assignReturnTo === 'selectGuest') {
+      renderGuestSelectPage();
+    } else {
+      renderAddGuestPage();
+    }
   });
 
   // 迁移按钮事件
   document.querySelectorAll('.migration-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', () => {
       const index = parseInt(btn.dataset.index);
       const suggestion = suggestions[index];
       if (confirm(`确认迁移？\n${suggestion.reason}`)) {

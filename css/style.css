@@ -40,7 +40,7 @@ body {
 .table-card {
   background: white;
   border-radius: 12px;
-  padding: 12px;
+  padding: 16px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   cursor: pointer;
   transition: transform 0.2s;
@@ -55,40 +55,47 @@ body {
   border: 2px solid #4caf50;
 }
 
+.table-card .table-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
 .table-card .table-number {
-  font-size: 14px;
-  color: #666;
-  margin-bottom: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
 }
 
 .table-card .guest-list {
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 15px;
+  line-height: 2;
 }
 
 .table-card .guest-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 4px 0;
 }
 
 .table-card .guest-name {
   font-weight: 500;
+  font-size: 16px;
 }
 
 .table-card .guest-amount {
-  font-size: 11px;
-  padding: 2px 6px;
+  font-size: 13px;
+  padding: 3px 8px;
   background: #f0f0f0;
   border-radius: 4px;
   color: #666;
 }
 
 .table-card .slots {
-  margin-top: 8px;
-  font-size: 12px;
-  color: #999;
-  text-align: right;
+  font-size: 14px;
+  color: #666;
 }
 
 .bottom-actions {
@@ -154,12 +161,28 @@ body {
 }
 
 .back-btn {
-  padding: 8px 12px;
-  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: white;
   border: none;
-  font-size: 16px;
-  color: #1976d2;
+  border-radius: 50%;
+  color: #666;
   cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.back-btn:hover {
+  background: #f5f5f5;
+  color: #333;
+  transform: scale(1.05);
+}
+
+.back-btn:active {
+  transform: scale(0.95);
 }
 
 .form {
@@ -390,4 +413,146 @@ body {
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
+}
+
+/* 搜索框样式 */
+.search-bar {
+  margin-bottom: 12px;
+}
+
+.search-bar input {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 15px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.search-bar input:focus {
+  outline: none;
+  border-color: #1976d2;
+  background: white;
+}
+
+/* 空状态样式 */
+.guest-select-empty,
+.exclude-empty {
+  padding: 24px;
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+}
+
+/* 客人选择页面样式 */
+.guest-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 80px;
+}
+
+.guest-select-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: white;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.guest-select-item:hover {
+  background: #e3f2fd;
+  transform: translateY(-2px);
+}
+
+.guest-select-item.seated {
+  background: #fff8e1;
+  border: 1px solid #ffc107;
+}
+
+.guest-select-item.seated:hover {
+  background: #ffecb3;
+}
+
+.guest-select-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.guest-select-item {
+  display: flex;
+  align-items: center;
+}
+
+.guest-select-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.guest-select-item .guest-name {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.guest-select-item .guest-info {
+  font-size: 12px;
+  color: #666;
+  padding: 4px 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+.seated-badge {
+  font-size: 12px;
+  padding: 4px 8px;
+  background: #ffc107;
+  color: #333;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.edit-guest-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: white;
+  border: none;
+  border-radius: 50%;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.edit-guest-btn:hover {
+  background: #f5f5f5;
+  color: #1976d2;
+  transform: scale(1.1);
+}
+
+.edit-guest-btn:active {
+  transform: scale(0.95);
+}
+
+.bottom-fixed-btn {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px;
+  background: white;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
+}
+
+.bottom-fixed-btn .primary-btn {
+  width: 100%;
 }
