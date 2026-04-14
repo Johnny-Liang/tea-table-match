@@ -55,6 +55,11 @@ body {
   border: 2px solid #4caf50;
 }
 
+.table-card.force-assigned {
+  border: 2px solid rgba(255, 165, 0, 0.6);
+  background: #fffbf5;
+}
+
 .table-card .table-header-row {
   display: flex;
   justify-content: space-between;

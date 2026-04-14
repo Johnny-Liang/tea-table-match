@@ -26,8 +26,9 @@ function renderTables(tables) {
   const container = document.getElementById('tables-container');
   container.innerHTML = tables.map(table => {
     const isFull = table.guests.length >= MAX_GUESTS_PER_TABLE;
+    const isForceAssigned = table.forceAssigned === true;
     return `
-      <div class="table-card ${isFull ? 'full' : ''}" data-table-id="${table.id}">
+      <div class="table-card ${isFull ? 'full' : ''} ${isForceAssigned ? 'force-assigned' : ''}" data-table-id="${table.id}">
         <div class="table-header-row">
           <span class="table-number">桌 ${table.id}</span>
           <span class="slots">${table.guests.length}/${MAX_GUESTS_PER_TABLE}人</span>
@@ -251,8 +252,50 @@ function removeGuestFromTable(guestId) {
     if (table.guests.length === 0) {
       table.amount = null;
     }
+    // 检查是否需要清除 forceAssigned 标记
+    checkAndClearForceAssigned(table, state);
     saveState(state);
   }
+}
+
+// 检查桌子是否需要清除强制派桌标记
+function checkAndClearForceAssigned(table, state) {
+  if (!table.forceAssigned) return;
+
+  // 如果桌子上只有0-1个人，不需要检查，肯定兼容
+  if (table.guests.length <= 1) {
+    table.forceAssigned = false;
+    return;
+  }
+
+  // 检查所有客人之间是否两两兼容
+  for (let i = 0; i < table.guests.length; i++) {
+    for (let j = i + 1; j < table.guests.length; j++) {
+      const guestA = table.guests[i];
+      const guestB = table.guests[j];
+
+      // 检查金额兼容性
+      const amountsA = new Set(guestA.amounts);
+      const amountsB = new Set(guestB.amounts);
+      const hasCommonAmount = guestA.amounts.some(a => amountsB.has(a));
+      if (!hasCommonAmount) return; // 金额不兼容，不清除
+
+      // 检查抽烟兼容性
+      if (guestA.smokeTolerance !== 'any' && guestB.smokeTolerance !== 'any' &&
+          guestA.smokeTolerance !== guestB.smokeTolerance) {
+        return; // 抽烟习惯冲突，不清除
+      }
+
+      // 检查社交冲突
+      if (guestA.excludeGuestIds?.includes(guestB.id) ||
+          guestB.excludeGuestIds?.includes(guestA.id)) {
+        return; // 社交冲突，不清除
+      }
+    }
+  }
+
+  // 所有检查通过，清除标记
+  table.forceAssigned = false;
 }
 
 // 设置页面
@@ -473,7 +516,22 @@ function bindAddGuestEvents() {
   autoAssignBtn.addEventListener('click', () => {
     const guest = getFormData();
     saveGuest(guest); // 先保存客人数据
-    renderAssignPage(guest);
+
+    // 检查客人是否已落座
+    const state = getState();
+    const currentTable = state.tables.find(t => t.guests.some(g => g.id === guest.id));
+    if (currentTable) {
+      if (confirm(`客人已落座桌${currentTable.id}，重新派桌前会取消落座，是否确认？`)) {
+        // 取消落座后再进入派桌页面
+        removeGuestFromTable(guest.id);
+        guestOriginalTableId = null; // 清除原桌标记，表示是主动取消而非"借出"
+        renderAssignPage(guest);
+      }
+      // 用户取消则留在当前页面
+    } else {
+      guestOriginalTableId = null;
+      renderAssignPage(guest);
+    }
   });
 }
 
@@ -625,15 +683,24 @@ function renderAssignTables(sortedTables, guest) {
   container.querySelectorAll('.assign-table-card').forEach(card => {
     card.addEventListener('click', () => {
       const tableId = parseInt(card.dataset.tableId);
-      if (confirm(`确认将 ${guest.name} 派到 桌 ${tableId}？`)) {
-        assignGuestToTable(guest, tableId);
+      const isDisabled = card.classList.contains('disabled');
+      const tableInfo = sortedTables.find(t => t.id === tableId);
+
+      let confirmMessage = `确认将 ${guest.name} 派到 桌 ${tableId}？`;
+      if (isDisabled && tableInfo) {
+        // 强制派桌时显示额外提醒
+        confirmMessage = `⚠️ 强制派桌提醒\n\n${tableInfo.reason}\n\n强制派桌后该桌子将不受「${tableInfo.reason}」限制。\n\n确认将 ${guest.name} 派到 桌 ${tableId}？`;
+      }
+
+      if (confirm(confirmMessage)) {
+        assignGuestToTable(guest, tableId, isDisabled);
         renderHomePage();
       }
     });
   });
 }
 
-function assignGuestToTable(guest, tableId) {
+function assignGuestToTable(guest, tableId, forceAssigned = false) {
   const state = getState();
   const table = state.tables.find(t => t.id === tableId);
 
@@ -647,11 +714,18 @@ function assignGuestToTable(guest, tableId) {
       if (originalTable.guests.length === 0) {
         originalTable.amount = null;
       }
+      // 检查原桌是否需要清除强制派桌标记
+      checkAndClearForceAssigned(originalTable, state);
     }
     guestOriginalTableId = null; // 清空标记
   }
 
   table.guests.push(guest);
+
+  // 如果是强制派桌（选择了不兼容的桌子），标记该桌
+  if (forceAssigned) {
+    table.forceAssigned = true;
+  }
 
   if (!table.amount) {
     table.amount = getTableAmount(table.guests);
@@ -708,6 +782,10 @@ function executeMigration(suggestion, newGuest) {
   // 新客人添加到原桌
   newGuest.tableId = suggestion.fromTable;
   fromTable.guests.push(newGuest);
+
+  // 检查是否需要清除强制派桌标记
+  checkAndClearForceAssigned(fromTable, state);
+  checkAndClearForceAssigned(toTable, state);
 
   // 更新桌面档位
   fromTable.amount = getTableAmount(fromTable.guests);
